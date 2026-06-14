@@ -1,7 +1,8 @@
 import js from "@eslint/js";
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
-export default tseslint.config(
+export default defineConfig(
     {
         ignores: [
             "**/node_modules/**",
@@ -13,18 +14,26 @@ export default tseslint.config(
     },
 
     js.configs.recommended,
+
     ...tseslint.configs.recommended,
 
     {
         files: ["**/*.{ts,tsx}"],
 
+        extends: [...tseslint.configs.recommendedTypeChecked],
+
+        languageOptions: {
+            parserOptions: {
+                projectService: true,
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+
         rules: {
-            // General
-            "eqeqeq": ["error", "always"],
+            eqeqeq: ["error", "always"],
             "prefer-const": "error",
             "no-var": "error",
 
-            // TS
             "@typescript-eslint/no-explicit-any": "warn",
 
             "@typescript-eslint/no-unused-vars": [
@@ -40,9 +49,13 @@ export default tseslint.config(
                 "error",
                 {
                     prefer: "type-imports",
+                    fixStyle: "inline-type-imports",
                 },
             ],
 
+            "@typescript-eslint/no-floating-promises": "error",
+            "@typescript-eslint/no-misused-promises": "error",
+            "@typescript-eslint/require-await": "off",
             "@typescript-eslint/no-inferrable-types": "off",
             "@typescript-eslint/ban-ts-comment": "warn",
         },
