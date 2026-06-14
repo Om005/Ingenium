@@ -1,0 +1,34 @@
+{
+    "name": "ingenium",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "dev": "tsx src/main.ts",
+        "build": "tsc",
+        "start": "node dist/main.js",
+        "format": "prettier --write \"**/*.{js,ts,tsx,json,css}\"",
+        "format:check": "prettier --check \"**/*.{js,ts,tsx,json,css}\"",
+        "lint": "eslint ."
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "devEngines": {
+        "packageManager": {
+            "name": "pnpm",
+            "version": "^11.1.0",
+            "onFail": "download"
+        }
+    },
+    "type": "module",
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/node": "^25.9.3",
+        "eslint": "^10.5.0",
+        "prettier": "^3.8.4",
+        "tsx": "^4.22.4",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.61.0"
+    }
+}
