@@ -1,4 +1,4 @@
-import type { ActionTracker } from "@core/action-tracker.js";
+import type { ActionTracker } from "@core/action/action-tracker.js";
 import type { AgentConfig, StagingState } from "@core/types.js";
 import path from "path";
 import fs from "node:fs";

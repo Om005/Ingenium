@@ -1,4 +1,4 @@
-import type { ActionTracker } from "@core/action-tracker.js";
+import type { ActionTracker } from "@core/action/action-tracker.js";
 import type { AgentConfig } from "@core/types.js";
 
 export class ShellTools {

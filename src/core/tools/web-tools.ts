@@ -1,5 +1,5 @@
 import env from "@config/env.js";
-import type { ActionTracker } from "@core/action-tracker.js";
+import type { ActionTracker } from "@core/action/action-tracker.js";
 import type { AgentConfig, StagingState } from "@core/types.js";
 
 const TAVILY_API_URL = "https://api.tavily.com/search";

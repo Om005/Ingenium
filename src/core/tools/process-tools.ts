@@ -1,6 +1,6 @@
-import type { ActionTracker } from "@core/action-tracker.js";
+import type { ActionTracker } from "@core/action/action-tracker.js";
 import type { AgentConfig } from "@core/types.js";
-import type { ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
 
@@ -19,6 +19,72 @@ const registry = new Map<string, ManagedProcess>();
 let processCounter = 0;
 const MAX_LOG_LINES = 500;
 
+function appendLog(proc: ManagedProcess, line: string) {
+    proc.logs.push(line);
+    if (proc.logs.length > MAX_LOG_LINES) {
+        proc.logs.shift();
+    }
+}
+
+export function applyStartProcess(encodedCommand: string): string {
+    // Format: __start_process__:<id>:<command>:<cwd>
+    const parts = encodedCommand.replace("__start_process__:", "").split(":");
+    const id = parts[0]!;
+    const cwd = parts[parts.length - 1]!;
+    const command = parts.slice(1, parts.length - 1).join(":");
+
+    const child = spawn(command, {
+        shell: true,
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const proc: ManagedProcess = {
+        id,
+        command,
+        cwd,
+        pid: child.pid ?? -1,
+        startedAt: new Date(),
+        logs: [],
+        process: child,
+        alive: true,
+    };
+
+    child.stdout?.on("data", (data: Buffer) => {
+        const lines = data.toString().split("\n").filter(Boolean);
+        lines.forEach((line) => appendLog(proc, `[stdout] ${line}`));
+    });
+
+    child.stderr?.on("data", (data: Buffer) => {
+        const lines = data.toString().split("\n").filter(Boolean);
+        lines.forEach((line) => appendLog(proc, `[stderr] ${line}`));
+    });
+
+    child.on("exit", (code) => {
+        proc.alive = false;
+        appendLog(proc, `[exit] Process exited with code ${code}`);
+    });
+
+    registry.set(id, proc);
+    return `Process [${id}] started — pid=${child.pid}`;
+}
+
+export function applyStopProcess(encodedCommand: string): string {
+    const id = encodedCommand.replace("__stop_process__:", "");
+    const proc = registry.get(id);
+    if (!proc || !proc.alive) return `Process ${id} not found or already stopped.`;
+
+    try {
+        proc.process.kill("SIGTERM");
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        console.log(`Failed to stop process [${id}]: ${message}`);
+    }
+    proc.alive = false;
+    return `Process [${id}] stopped.`;
+}
+
 export class ProcessTools {
     constructor(
         private config: AgentConfig,
@@ -27,13 +93,6 @@ export class ProcessTools {
 
     private nextId(): string {
         return `proc_${++processCounter}`;
-    }
-
-    private appendLog(proc: ManagedProcess, line: string) {
-        proc.logs.push(line);
-        if (proc.logs.length > MAX_LOG_LINES) {
-            proc.logs.shift();
-        }
     }
 
     async listProcesses(): Promise<string> {

@@ -1,11 +1,11 @@
 import type { AgentConfig } from "@core/types.js";
-import type { ActionTracker } from "@core/action-tracker.js";
-import { FsTools } from "./fs-tools.js";
-import { WebTools } from "./web-tools.js";
-import { ShellTools } from "./shell-tools.js";
-import { GitTools } from "./git-tools.js";
-import { SkillsTools } from "./skills-tools.js";
-import { ProcessTools } from "./process-tools.js";
+import type { ActionTracker } from "@core/action/action-tracker.js";
+import { FsTools } from "@core/tools/fs-tools.js";
+import { WebTools } from "@core/tools/web-tools.js";
+import { ShellTools } from "@core/tools/shell-tools.js";
+import { GitTools } from "@core/tools/git-tools.js";
+import { SkillsTools } from "@core/tools/skills-tools.js";
+import { ProcessTools } from "@core/tools/process-tools.js";
 
 export class ToolExecutor {
     private overlay = new Map<string, string>();
