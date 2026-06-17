@@ -4,6 +4,7 @@ import { FsTools } from "./fs-tools.js";
 import { WebTools } from "./web-tools.js";
 import { ShellTools } from "./shell-tools.js";
 import { GitTools } from "./git-tools.js";
+import { SkillsTools } from "./skills-tools.js";
 
 export class ToolExecutor {
     private overlay = new Map<string, string>();
@@ -13,6 +14,8 @@ export class ToolExecutor {
     private webTools: WebTools;
     private shellTools: ShellTools;
     private gitTools: GitTools;
+    private skillsTools: SkillsTools;
+
     constructor(
         private config: AgentConfig,
         private tracker: ActionTracker
@@ -30,5 +33,7 @@ export class ToolExecutor {
         this.shellTools = new ShellTools(config, tracker);
 
         this.gitTools = new GitTools(config, tracker);
+
+        this.skillsTools = new SkillsTools(config, tracker);
     }
 }
