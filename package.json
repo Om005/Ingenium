@@ -4,7 +4,7 @@
     "description": "",
     "main": "index.js",
     "scripts": {
-        "dev": "tsx watch src/main.tsx",
+        "dev": "tsx src/main.tsx",
         "build": "tsc",
         "start": "node dist/main.js",
         "format": "prettier --write \"**/*.{js,ts,tsx,json,css}\"",

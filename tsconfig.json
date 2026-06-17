@@ -5,7 +5,7 @@
             "@providers/*": ["./src/providers/*"],
             "@ui/*": ["./src/ui/*"],
             "@session/*": ["./src/session/*"],
-            "@": ["./src"]
+            "@core/*": ["./src/core/*"]
         },
 
         "rootDir": "./src",
