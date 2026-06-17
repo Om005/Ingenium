@@ -4,7 +4,7 @@ import type { AgentConfig } from "@core/types.js";
 export class ShellTools {
     constructor(
         private config: AgentConfig,
-        private tracker: ActionTracker,
+        private tracker: ActionTracker
     ) {}
 
     queueShell(command: string): string {
