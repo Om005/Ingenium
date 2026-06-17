@@ -5,6 +5,7 @@ import { WebTools } from "./web-tools.js";
 import { ShellTools } from "./shell-tools.js";
 import { GitTools } from "./git-tools.js";
 import { SkillsTools } from "./skills-tools.js";
+import { ProcessTools } from "./process-tools.js";
 
 export class ToolExecutor {
     private overlay = new Map<string, string>();
@@ -15,6 +16,7 @@ export class ToolExecutor {
     private shellTools: ShellTools;
     private gitTools: GitTools;
     private skillsTools: SkillsTools;
+    private processTools: ProcessTools;
 
     constructor(
         private config: AgentConfig,
@@ -35,5 +37,7 @@ export class ToolExecutor {
         this.gitTools = new GitTools(config, tracker);
 
         this.skillsTools = new SkillsTools(config, tracker);
+
+        this.processTools = new ProcessTools(config, tracker);
     }
 }
