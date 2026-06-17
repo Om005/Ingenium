@@ -6,6 +6,7 @@ import { ShellTools } from "@core/tools/shell-tools.js";
 import { GitTools } from "@core/tools/git-tools.js";
 import { SkillsTools } from "@core/tools/skills-tools.js";
 import { ProcessTools } from "@core/tools/process-tools.js";
+import { ApprovalExecutor } from "./approval-executor.js";
 
 export class ToolExecutor {
     private overlay = new Map<string, string>();
@@ -17,6 +18,7 @@ export class ToolExecutor {
     private gitTools: GitTools;
     private skillsTools: SkillsTools;
     private processTools: ProcessTools;
+    private approve: ApprovalExecutor;
 
     constructor(
         private config: AgentConfig,
@@ -39,5 +41,7 @@ export class ToolExecutor {
         this.skillsTools = new SkillsTools(config, tracker);
 
         this.processTools = new ProcessTools(config, tracker);
+
+        this.approve = new ApprovalExecutor(config, tracker);
     }
 }
