@@ -30,7 +30,7 @@ export class GitTools {
         }
     }
 
-    async gitStatus(repoPath: string): Promise<string> {
+    async gitStatus(repoPath?: string): Promise<string> {
         const cwd = this.resolveCwd(repoPath);
         const branch = this.git("rev-parse --abbrev-ref HEAD", cwd);
         const status = this.git("status --short", cwd);

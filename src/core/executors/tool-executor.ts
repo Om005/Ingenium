@@ -12,13 +12,13 @@ export class ToolExecutor {
     private overlay = new Map<string, string>();
     private deleted = new Set<string>();
 
-    private fsTools: FsTools;
-    private webTools: WebTools;
-    private shellTools: ShellTools;
-    private gitTools: GitTools;
-    private skillsTools: SkillsTools;
-    private processTools: ProcessTools;
-    private approve: ApprovalExecutor;
+    fsTools: FsTools;
+    webTools: WebTools;
+    shellTools: ShellTools;
+    gitTools: GitTools;
+    skillsTools: SkillsTools;
+    processTools: ProcessTools;
+    approve: ApprovalExecutor;
 
     constructor(
         private config: AgentConfig,
