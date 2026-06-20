@@ -1,4 +1,4 @@
-import { text, isCancel, select } from "@clack/prompts";
+import { text, isCancel, select, spinner, note, outro, log } from "@clack/prompts";
 import chalk from "chalk";
 import { defaultAgentConfig } from "@core/types.js";
 import { ActionTracker } from "@core/action/action-tracker.js";
@@ -17,7 +17,7 @@ import {
 } from "@session/session-manager.js";
 import { runApproval } from "@core/action/approval.js";
 
-const EXIT_COMMANDS = new Set(["exit", "quit", "q", "bye", ":q"]);
+const EXIT_COMMANDS = new Set(["/exit", "quit", "q", "bye", ":q"]);
 
 function formatRelativeTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
@@ -37,45 +37,102 @@ async function pickSession(projectPath: string): Promise<Session> {
     }
 
     const choice = await select({
-        message: "Session",
+        message: "Target Session",
         options: [
-            { value: "__new__", label: "New session" },
+            { value: "__new__", label: "Create new session" },
             ...existing.slice(0, 8).map((s) => ({
                 value: s.id,
-                label: `${s.title}  ${chalk.dim(formatRelativeTime(s.updatedAt))}  ${chalk.dim(`(${Math.floor(s.messageCount / 2)} exchanges)`)}`,
+                label: `${s.title}  ${chalk.dim(formatRelativeTime(s.updatedAt))}  ${chalk.dim(`(${Math.floor(s.messageCount / 2)} turns)`)}`,
             })),
         ],
     });
 
     if (isCancel(choice)) {
-        console.log(chalk.dim("Goodbye."));
+        outro(chalk.dim("System offline."));
         process.exit(0);
     }
+
     if (choice === "__new__") {
         return createSession(projectPath);
     }
 
     const loaded = loadSession(projectPath, choice as string);
     if (!loaded) {
-        console.log(chalk.yellow("Session not found, starting fresh."));
+        note("Session corrupted or missing. Initiating fresh workspace.", "Warning");
         return createSession(projectPath);
     }
 
-    console.log(
-        chalk.dim(
-            `\nResuming: "${loaded.title}" — ${Math.floor(loaded.messages.length / 2)} previous exchanges\n`
-        )
+    note(
+        `Restored context: ${Math.floor(loaded.messages.length / 2)} previous exchanges.`,
+        `Session: ${loaded.title}`
     );
     return loaded;
 }
 
-async function runAgentMode() {
-    console.log(chalk.bold.cyan("\n┌─ Agent Mode ───────────────────────────────┐"));
-    console.log(chalk.dim("│  Multi-turn session. Type 'exit' to quit.  │"));
-    console.log(chalk.bold.cyan("└────────────────────────────────────────────┘\n"));
+async function handleLocalCommands(
+    input: string,
+    session: Session,
+    tracker: ActionTracker
+): Promise<Session | null> {
+    const cmd = input.toLowerCase();
 
+    if (cmd === "/sessions") {
+        const newSession = await pickSession(session.projectPath);
+        return newSession;
+    }
+
+    if (cmd === "/clear") {
+        session.messages = [];
+        tracker.clear();
+        log.success("Context wiped. Memory is clear.");
+        return session;
+    }
+
+    if (cmd === "/help") {
+        const helpText = `
+    ${chalk.bold("Available Local Commands:")}
+    ${chalk.cyan("/help")}   - Show this menu
+    ${chalk.cyan("/sessions")} - Switch or create sessions
+    ${chalk.cyan("/clear")}  - Wipe current session memory
+    ${chalk.cyan("/exit")}    - Terminate the agent
+        `.trim();
+        console.log(`\n${helpText}\n`);
+        return session;
+    }
+
+    return null;
+}
+
+function printToolLine(
+    toolName: string,
+    target: string,
+    status: "ok" | "error",
+    detail?: string
+): void {
+    const icon = status === "ok" ? chalk.green("✓") : chalk.red("✗");
+    const name = chalk.cyan.bold(toolName);
+    const dim = target ? chalk.dim(`  ${target}`) : "";
+    const extra = detail ? chalk.dim(`  ${detail}`) : "";
+    console.log(`  ${icon} ${name}${dim}${extra}`);
+}
+
+function extractTarget(input: unknown): string {
+    if (!input || typeof input !== "object") return "";
+    const obj = input as Record<string, unknown>;
+
+    const value =
+        obj.command ?? obj.query ?? obj.message ?? obj.url ?? obj.branch ?? obj.id ?? obj.path;
+
+    if (value === undefined || value === null) return "";
+
+    const str = String(value);
+    return str.length > 70 ? str.slice(0, 70) + "..." : str;
+}
+
+export default async function runAgentMode() {
     const config = defaultAgentConfig();
-    const session = await pickSession(config.codebasePath);
+    let session = await pickSession(config.codebasePath);
+
     const tracker = new ActionTracker();
     const approvalExecutor = new ApprovalExecutor(config, tracker);
     const executor = new ToolExecutor(config, tracker);
@@ -85,52 +142,75 @@ async function runAgentMode() {
         model: await getAgentModel(),
         stopWhen: stepCountIs(30),
         instructions: `
-You are Ingenium, an expert AI coding assistant running locally on the user's machine.
+You are Ingenium, an expert AI coding assistant.
 Workspace root: ${config.codebasePath}
 
 Rules:
-- All file mutations (create, modify, delete) are STAGED and shown to the user for approval before being applied. Never tell the user a file was written - say it was staged.
-- Be concise. No fluff. Format responses in Markdown.
-- If you are unsure about something, ask before acting.
+- All file mutations (create, modify, delete) are STAGED and shown to the user for approval. Never claim a file was written; state it was staged.
+- Be highly analytical and concise. Omit conversational filler.
+- Format responses strictly in Markdown.
+- If parameters are ambiguous, halt execution and request clarification.
         `.trim(),
         tools,
     });
 
     while (true) {
         const input = await text({
-            message: chalk.green("Command:"),
-            placeholder: "What do you want to do? (exit to quit)",
+            message: chalk.green.bold("❯"),
+            placeholder: "Input objective or slash command...",
         });
 
         if (isCancel(input) || EXIT_COMMANDS.has((input as string).trim().toLowerCase())) {
-            console.log(chalk.dim("\nSession ended. Goodbye.\n"));
+            outro(chalk.dim("Session terminated."));
             break;
         }
 
         const userMessage = (input as string).trim();
         if (!userMessage) continue;
 
-        appendMessage(session, { role: "user", content: userMessage });
+        if (userMessage.startsWith("/")) {
+            const newSession = await handleLocalCommands(userMessage, session, tracker);
+            if (newSession) {
+                session = newSession;
+                continue;
+            }
+        }
 
+        appendMessage(session, { role: "user", content: userMessage });
         executor.clearStaging();
         tracker.clear();
 
-        console.log(chalk.dim("\nThinking...\n"));
+        console.log();
+
+        let execSpinner = spinner();
+        execSpinner.start("Thinking...");
 
         try {
             const result = await agent.generate({
                 messages: session.messages,
-                onStepFinish: ({ toolCalls }) => {
-                    for (const call of toolCalls) {
-                        const preview = JSON.stringify(call.input).slice(0, 120);
-                        console.log(
-                            chalk.cyan("  ⚙"),
-                            chalk.bold(call.toolName),
-                            chalk.dim(preview + (preview.length >= 120 ? "..." : ""))
-                        );
-                    }
+                onStepFinish: ({ toolCalls, toolResults }) => {
+                    if (!toolCalls || toolCalls.length === 0) return;
+
+                    execSpinner.stop();
+
+                    toolCalls.forEach((call, i) => {
+                        const target = extractTarget(call.input);
+
+                        const matchingResult = toolResults?.[i];
+                        const isError =
+                            matchingResult &&
+                            typeof matchingResult === "object" &&
+                            "error" in (matchingResult as Record<string, unknown>);
+
+                        printToolLine(call.toolName, target, isError ? "error" : "ok");
+                    });
+
+                    execSpinner = spinner();
+                    execSpinner.start(chalk.dim("Thinking..."));
                 },
             });
+
+            execSpinner.stop("Analysis complete.");
 
             if (result.text?.trim()) {
                 appendMessage(session, { role: "assistant", content: result.text });
@@ -143,18 +223,16 @@ Rules:
                 const { errors } = approvalExecutor.applyApprovedFromTracker();
 
                 if (errors.length) {
-                    console.log(chalk.red("\n✗ Some actions failed:\n"));
-                    errors.forEach((e) => console.log(chalk.red(`  - ${e}`)));
+                    note(errors.map((e) => `• ${e}`).join("\n"), "Execution Failures");
                 } else {
-                    console.log(chalk.green("✓ Applied.\n"));
+                    log.success("All approved mutations applied successfully.");
                 }
             }
         } catch (err) {
+            execSpinner.stop(chalk.red("Execution failed."));
             const message = err instanceof Error ? err.message : String(err);
-            console.log(chalk.red(`\n✗ Error: ${message}\n`));
+            note(message, "Fatal Error");
             session.messages.pop();
         }
     }
 }
-
-export default runAgentMode;

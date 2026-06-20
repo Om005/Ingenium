@@ -58,6 +58,7 @@ export default defineConfig(
             "@typescript-eslint/require-await": "off",
             "@typescript-eslint/no-unnecessary-type-assertion": "off",
             "@typescript-eslint/no-unsafe-call": "off",
+            "@typescript-eslint/no-base-to-string": "off",
             "@typescript-eslint/no-inferrable-types": "off",
             "@typescript-eslint/ban-ts-comment": "off",
         },

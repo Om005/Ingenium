@@ -1,19 +1,34 @@
+import { select, isCancel, intro, outro, note } from "@clack/prompts";
 import chalk from "chalk";
-import { select, isCancel } from "@clack/prompts";
 import runAgentMode from "@core/orchestrator.js";
 
-async function runCliMode() {
+export default async function runCliMode() {
+    console.clear();
+    intro(chalk.bgCyan.black.bold(" INGENIUM "));
+
     const submode = await select({
-        message: "Select mode",
+        message: "Initialize operational mode",
         options: [
-            { value: "agent", label: "Agent Mode - autonomous, acts on your behalf" },
-            { value: "plan", label: "Plan Mode  - proposes steps, you approve each" },
-            { value: "exit", label: "Exit" },
+            {
+                value: "agent",
+                label: "Agent Mode",
+                hint: "Autonomous execution with staged approvals",
+            },
+            {
+                value: "plan",
+                label: "Plan Mode",
+                hint: "Sequential proposal and review (Coming Soon)",
+            },
+            {
+                value: "exit",
+                label: "Exit",
+                hint: "Terminate sequence",
+            },
         ],
     });
 
     if (isCancel(submode) || submode === "exit") {
-        console.log(chalk.dim("Goodbye."));
+        outro(chalk.dim("System offline."));
         process.exit(0);
     }
 
@@ -22,9 +37,8 @@ async function runCliMode() {
             await runAgentMode();
             break;
         case "plan":
-            console.log(chalk.yellow("Plan Mode coming soon."));
+            note("Plan Mode is currently under construction.", "Notice");
+            outro(chalk.dim("System offline."));
             break;
     }
 }
-
-export default runCliMode;
