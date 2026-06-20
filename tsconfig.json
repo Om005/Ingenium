@@ -3,9 +3,10 @@
         "paths": {
             "@config/*": ["./src/config/*"],
             "@providers/*": ["./src/providers/*"],
-            "@ui/*": ["./src/ui/*"],
+            "@tui/*": ["./src/tui/*"],
             "@session/*": ["./src/session/*"],
-            "@core/*": ["./src/core/*"]
+            "@core/*": ["./src/core/*"],
+            "@interfaces/*": ["./src/interfaces/*"]
         },
 
         "rootDir": "./src",

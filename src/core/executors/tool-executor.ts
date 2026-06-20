@@ -44,4 +44,9 @@ export class ToolExecutor {
 
         this.approve = new ApprovalExecutor(config, tracker);
     }
+
+    clearStaging() {
+        this.overlay.clear();
+        this.deleted.clear();
+    }
 }

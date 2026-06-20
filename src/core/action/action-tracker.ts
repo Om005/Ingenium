@@ -1,5 +1,5 @@
-import type { ActionLog, ActionStatus } from "../types.js";
-import { isMutationType } from "../types.js";
+import type { ActionLog, ActionStatus } from "@core/types.js";
+import { isMutationType } from "@core/types.js";
 
 export class ActionTracker {
     private actions: ActionLog[] = [];
@@ -36,5 +36,13 @@ export class ActionTracker {
         if (!a) return;
         a.status = status;
         if (userApproved !== undefined) a.userApproved = userApproved;
+    }
+
+    hasPendingActions(): boolean {
+        return this.getPendingMutations().length > 0;
+    }
+
+    clear(): void {
+        this.actions = [];
     }
 }

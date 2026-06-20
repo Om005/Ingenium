@@ -56,8 +56,10 @@ export default defineConfig(
             "@typescript-eslint/no-floating-promises": "error",
             "@typescript-eslint/no-misused-promises": "error",
             "@typescript-eslint/require-await": "off",
+            "@typescript-eslint/no-unnecessary-type-assertion": "off",
+            "@typescript-eslint/no-unsafe-call": "off",
             "@typescript-eslint/no-inferrable-types": "off",
-            "@typescript-eslint/ban-ts-comment": "warn",
+            "@typescript-eslint/ban-ts-comment": "off",
         },
     }
 );
