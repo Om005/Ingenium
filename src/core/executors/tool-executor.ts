@@ -7,6 +7,7 @@ import { GitTools } from "@core/tools/git-tools.js";
 import { SkillsTools } from "@core/tools/skills-tools.js";
 import { ProcessTools } from "@core/tools/process-tools.js";
 import { ApprovalExecutor } from "./approval-executor.js";
+import { MemoryTools } from "@core/tools/memory-tools.js";
 
 export class ToolExecutor {
     private overlay = new Map<string, string>();
@@ -19,6 +20,7 @@ export class ToolExecutor {
     skillsTools: SkillsTools;
     processTools: ProcessTools;
     approve: ApprovalExecutor;
+    memoryTools: MemoryTools;
 
     constructor(
         private config: AgentConfig,
@@ -43,6 +45,8 @@ export class ToolExecutor {
         this.processTools = new ProcessTools(config, tracker);
 
         this.approve = new ApprovalExecutor(config, tracker);
+
+        this.memoryTools = new MemoryTools();
     }
 
     clearStaging() {

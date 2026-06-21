@@ -256,5 +256,43 @@ export function createAgentTools(executor: ToolExecutor) {
             }),
             execute: async ({ id }) => executor.processTools.stopProcess(id),
         }),
+
+        remember: tool({
+            description:
+                "Save a piece of information for later recall, persisted across all sessions and projects. Use this when the user says 'remember that...' or shares something worth keeping long-term (preferences, facts, recurring context). Overwrites if the key already exists.",
+            inputSchema: z.object({
+                key: z
+                    .string()
+                    .describe(
+                        "Short identifier for this memory, e.g. 'staging_db_password_rotation'"
+                    ),
+                value: z.string().describe("The information to remember"),
+            }),
+            execute: async ({ key, value }) => executor.memoryTools.remember(key, value),
+        }),
+
+        recall: tool({
+            description:
+                "Retrieve a previously remembered piece of information by key. Use this when you need context that may have been saved in an earlier session.",
+            inputSchema: z.object({
+                key: z.string().describe("The key used when the memory was saved"),
+            }),
+            execute: async ({ key }) => executor.memoryTools.recall(key),
+        }),
+
+        forget: tool({
+            description: "Delete a remembered piece of information by key.",
+            inputSchema: z.object({
+                key: z.string(),
+            }),
+            execute: async ({ key }) => executor.memoryTools.forget(key),
+        }),
+
+        list_memories: tool({
+            description:
+                "List all remembered keys and a preview of their values. Use this to see what context is already saved before deciding whether to ask the user or recall something.",
+            inputSchema: z.object({}),
+            execute: async () => executor.memoryTools.listMemories(),
+        }),
     };
 }
