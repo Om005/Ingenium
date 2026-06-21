@@ -4,8 +4,10 @@ import { Command } from "commander";
 import wakeup from "./tui/wakeup.js";
 import { checkEnv } from "@config/envCheck.js";
 import runCliMode from "@interfaces/cli.js";
+import { initDb } from "@db/client.js";
 
 checkEnv();
+initDb();
 
 const program = new Command();
 

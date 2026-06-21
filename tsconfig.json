@@ -6,7 +6,8 @@
             "@tui/*": ["./src/tui/*"],
             "@session/*": ["./src/session/*"],
             "@core/*": ["./src/core/*"],
-            "@interfaces/*": ["./src/interfaces/*"]
+            "@interfaces/*": ["./src/interfaces/*"],
+            "@db/*": ["./src/db/*"]
         },
 
         "rootDir": "./src",

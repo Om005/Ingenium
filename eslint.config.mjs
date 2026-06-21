@@ -10,6 +10,7 @@ export default defineConfig(
             "**/build/**",
             "**/.next/**",
             "**/coverage/**",
+            "drizzle.config.ts",
         ],
     },
 
