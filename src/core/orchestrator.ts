@@ -4,6 +4,7 @@ import { defaultAgentConfig } from "@core/types.js";
 import { ActionTracker } from "@core/action/action-tracker.js";
 import { ToolExecutor } from "@core/executors/tool-executor.js";
 import { createAgentTools } from "@core/agent/tools.js";
+import { reminderScheduler } from "@core/executors/reminder-scheduler.js";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import getAgentModel from "@providers/openrouter.js";
 import { renderTerminalMarkdown } from "@tui/terminal-md.js";
@@ -138,21 +139,7 @@ export default async function runAgentMode() {
     const executor = new ToolExecutor(config, tracker);
     const tools = createAgentTools(executor);
 
-    const agent = new ToolLoopAgent({
-        model: await getAgentModel(),
-        stopWhen: stepCountIs(30),
-        instructions: `
-You are Ingenium, an expert AI coding assistant.
-Workspace root: ${config.codebasePath}
-
-Rules:
-- All file mutations (create, modify, delete) are STAGED and shown to the user for approval. Never claim a file was written; state it was staged.
-- Be highly analytical and concise. Omit conversational filler.
-- Format responses strictly in Markdown.
-- If parameters are ambiguous, halt execution and request clarification.
-        `.trim(),
-        tools,
-    });
+    await reminderScheduler.init();
 
     while (true) {
         const input = await text({
@@ -186,6 +173,23 @@ Rules:
         execSpinner.start("Thinking...");
 
         try {
+            const agent = new ToolLoopAgent({
+                model: await getAgentModel(),
+                stopWhen: stepCountIs(30),
+                instructions: `
+You are Ingenium, an expert AI coding assistant.
+Workspace root: ${config.codebasePath}
+Current local time is: ${new Date().toString()} (ISO: ${new Date().toISOString()}).
+
+Rules:
+- All file mutations (create, modify, delete) are STAGED and shown to the user for approval. Never claim a file was written; state it was staged.
+- Be highly analytical and concise. Omit conversational filler.
+- Format responses strictly in Markdown.
+- If parameters are ambiguous, halt execution and request clarification.
+                `.trim(),
+                tools,
+            });
+
             const result = await agent.generate({
                 messages: session.messages,
                 onStepFinish: ({ toolCalls, toolResults }) => {

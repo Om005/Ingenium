@@ -7,3 +7,12 @@ export const memories = sqliteTable("memories", {
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
+
+export const reminders = sqliteTable("reminders", {
+    id: text("id").primaryKey(),
+    message: text("message").notNull(),
+    triggerAt: integer("trigger_at", { mode: "timestamp" }).notNull(),
+    fired: integer("fired").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    deliverVia: text("deliver_via").notNull().default("desktop"),
+});

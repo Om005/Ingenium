@@ -41,6 +41,15 @@ export function initDb(): void {
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS reminders (
+            id TEXT PRIMARY KEY,
+            message TEXT NOT NULL,
+            trigger_at INTEGER NOT NULL,
+            fired INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            deliver_via TEXT NOT NULL DEFAULT 'desktop'
+        );
     `);
 }
 

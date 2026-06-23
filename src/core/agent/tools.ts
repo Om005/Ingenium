@@ -294,5 +294,44 @@ export function createAgentTools(executor: ToolExecutor) {
             inputSchema: z.object({}),
             execute: async () => executor.memoryTools.listMemories(),
         }),
+
+        set_reminder: tool({
+            description:
+                "Schedule a reminder for the user. Use this when the user asks to be reminded of something. Provide either delaySeconds (for relative offsets like 'in 30s') OR timeString (for absolute times like '11:22 AM', 'tomorrow at 11:22 AM').",
+            inputSchema: z.object({
+                text: z.string().describe("The reminder message, e.g., 'drinking water'"),
+                delaySeconds: z
+                    .number()
+                    .int()
+                    .positive()
+                    .optional()
+                    .describe(
+                        "Relative delay in seconds from now when the reminder should trigger"
+                    ),
+                timeString: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Absolute time string when the reminder should trigger, e.g., '11:22 AM', '17:30'"
+                    ),
+            }),
+            execute: async ({ text, delaySeconds, timeString }) =>
+                executor.reminderTools.setReminder(text, delaySeconds, timeString),
+        }),
+
+        list_reminders: tool({
+            description:
+                "List all currently scheduled pending reminders and recently triggered ones.",
+            inputSchema: z.object({}),
+            execute: async () => executor.reminderTools.listReminders(),
+        }),
+
+        cancel_reminder: tool({
+            description: "Cancel a pending reminder using its ID.",
+            inputSchema: z.object({
+                id: z.string().describe("The unique ID of the pending reminder to cancel"),
+            }),
+            execute: async ({ id }) => executor.reminderTools.cancelReminder(id),
+        }),
     };
 }
