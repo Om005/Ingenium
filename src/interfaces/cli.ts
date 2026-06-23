@@ -1,6 +1,6 @@
-import { select, isCancel, intro, outro, note } from "@clack/prompts";
+import { select, isCancel, intro, outro } from "@clack/prompts";
 import chalk from "chalk";
-import runAgentMode from "@core/orchestrator.js";
+import { runAgentMode, runPlanMode } from "@core/orchestrator.js";
 
 export default async function runCliMode() {
     console.clear();
@@ -17,7 +17,7 @@ export default async function runCliMode() {
             {
                 value: "plan",
                 label: "Plan Mode",
-                hint: "Sequential proposal and review (Coming Soon)",
+                hint: "Plan proposal and review",
             },
             {
                 value: "exit",
@@ -37,8 +37,7 @@ export default async function runCliMode() {
             await runAgentMode();
             break;
         case "plan":
-            note("Plan Mode is currently under construction.", "Notice");
-            outro(chalk.dim("System offline."));
+            await runPlanMode();
             break;
     }
 }

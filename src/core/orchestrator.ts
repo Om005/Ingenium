@@ -1,5 +1,7 @@
 import { text, isCancel, select, spinner, note, outro, log } from "@clack/prompts";
 import chalk from "chalk";
+import fs from "node:fs";
+import path from "node:path";
 import { defaultAgentConfig } from "@core/types.js";
 import { ActionTracker } from "@core/action/action-tracker.js";
 import { ToolExecutor } from "@core/executors/tool-executor.js";
@@ -130,7 +132,7 @@ function extractTarget(input: unknown): string {
     return str.length > 70 ? str.slice(0, 70) + "..." : str;
 }
 
-export default async function runAgentMode() {
+export async function runAgentMode() {
     const config = defaultAgentConfig();
     let session = await pickSession(config.codebasePath);
 
@@ -175,7 +177,7 @@ export default async function runAgentMode() {
         try {
             const agent = new ToolLoopAgent({
                 model: await getAgentModel(),
-                stopWhen: stepCountIs(30),
+                stopWhen: stepCountIs(60),
                 instructions: `
 You are Ingenium, an expert AI coding assistant.
 Workspace root: ${config.codebasePath}
@@ -187,6 +189,163 @@ Rules:
 - Format responses strictly in Markdown.
 - If parameters are ambiguous, halt execution and request clarification.
                 `.trim(),
+                tools,
+            });
+
+            const result = await agent.generate({
+                messages: session.messages,
+                onStepFinish: ({ toolCalls, toolResults }) => {
+                    if (!toolCalls || toolCalls.length === 0) return;
+
+                    execSpinner.stop();
+
+                    toolCalls.forEach((call, i) => {
+                        const target = extractTarget(call.input);
+
+                        const matchingResult = toolResults?.[i];
+                        const isError =
+                            matchingResult &&
+                            typeof matchingResult === "object" &&
+                            "error" in (matchingResult as Record<string, unknown>);
+
+                        printToolLine(call.toolName, target, isError ? "error" : "ok");
+                    });
+
+                    execSpinner = spinner();
+                    execSpinner.start(chalk.dim("Thinking..."));
+                },
+            });
+
+            execSpinner.stop("Analysis complete.");
+
+            if (result.text?.trim()) {
+                appendMessage(session, { role: "assistant", content: result.text });
+                console.log("\n" + renderTerminalMarkdown(result.text) + "\n");
+            }
+
+            if (tracker.hasPendingActions()) {
+                await runApproval(tracker);
+
+                const { errors } = approvalExecutor.applyApprovedFromTracker();
+
+                if (errors.length) {
+                    note(errors.map((e) => `• ${e}`).join("\n"), "Execution Failures");
+                } else {
+                    log.success("All approved mutations applied successfully.");
+                }
+            }
+        } catch (err) {
+            execSpinner.stop(chalk.red("Execution failed."));
+            const message = err instanceof Error ? err.message : String(err);
+            note(message, "Fatal Error");
+            session.messages.pop();
+        }
+    }
+}
+
+export async function runPlanMode() {
+    const config = defaultAgentConfig();
+    let session = await pickSession(config.codebasePath);
+
+    const tracker = new ActionTracker();
+    const approvalExecutor = new ApprovalExecutor(config, tracker);
+    const executor = new ToolExecutor(config, tracker);
+    const tools = createAgentTools(executor);
+
+    await reminderScheduler.init();
+
+    let isExecuting = false;
+
+    while (true) {
+        const input = await text({
+            message: chalk.green.bold("plan❯"),
+            placeholder: isExecuting
+                ? "Input objective or command..."
+                : "Describe query or type /execute to run the plan...",
+        });
+
+        if (isCancel(input) || EXIT_COMMANDS.has((input as string).trim().toLowerCase())) {
+            outro(chalk.dim("Plan session terminated."));
+            break;
+        }
+
+        const userMessage = (input as string).trim();
+        if (!userMessage) continue;
+
+        if (userMessage.startsWith("/")) {
+            const cmd = userMessage.toLowerCase();
+            if (cmd === "/execute") {
+                const planPath = path.join(config.codebasePath, "ingenium-plan.md");
+                if (!fs.existsSync(planPath)) {
+                    note(
+                        "No `ingenium-plan.md` file found in the workspace root. Please generate a plan first.",
+                        "Error"
+                    );
+                    continue;
+                }
+
+                const planContent = fs.readFileSync(planPath, "utf8");
+                log.info("Executing approved plan from `ingenium-plan.md`...");
+                isExecuting = true;
+
+                appendMessage(session, {
+                    role: "user",
+                    content: `Plan Execution Request: Please read and execute the approved plan from "ingenium-plan.md" step-by-step. Here is the current content of "ingenium-plan.md":\n\n${planContent}`,
+                });
+            } else {
+                const newSession = await handleLocalCommands(userMessage, session, tracker);
+                if (newSession) {
+                    session = newSession;
+                    continue;
+                }
+            }
+        } else {
+            appendMessage(session, { role: "user", content: userMessage });
+        }
+
+        if (userMessage.startsWith("/") && userMessage.toLowerCase() !== "/execute") {
+            continue;
+        }
+
+        executor.clearStaging();
+        tracker.clear();
+
+        console.log();
+
+        let execSpinner = spinner();
+        execSpinner.start("Thinking...");
+
+        try {
+            const agentInstructions = isExecuting
+                ? `
+You are Ingenium, an expert AI coding assistant.
+Workspace root: ${config.codebasePath}
+Current local time is: ${new Date().toString()} (ISO: ${new Date().toISOString()}).
+
+Rules:
+- You are in EXECUTION MODE. You must execute the approved plan from "ingenium-plan.md" step-by-step using your tools (file creation, modification, shell commands, etc.).
+- All file mutations are STAGED and shown to the user for approval. Never claim a file was written; state it was staged.
+- Be highly analytical and concise.
+- Format responses strictly in Markdown.
+                `.trim()
+                : `
+You are Ingenium, an expert AI coding assistant.
+Workspace root: ${config.codebasePath}
+Current local time is: ${new Date().toString()} (ISO: ${new Date().toISOString()}).
+
+Rules:
+- You are in PLAN MODE. Your only goal is to research the codebase and draft/modify a comprehensive step-by-step plan in "ingenium-plan.md".
+- You MUST write or update "ingenium-plan.md" in the workspace root using the staged file tools (create_file, modify_file). Do not make any other changes (such as creating other project files or executing commands) yet.
+- Tell the user that they can manually edit "ingenium-plan.md" or ask you for any changes.
+- Instruct the user that when they are satisfied with the plan, they should type "/execute" to run the plan.
+- Be highly analytical and concise.
+- Format responses strictly in Markdown.
+                `.trim();
+
+            const agent = new ToolLoopAgent({
+                model: await getAgentModel(),
+                stopWhen: stepCountIs(60),
+                instructions: agentInstructions,
                 tools,
             });
 
