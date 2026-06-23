@@ -6,7 +6,13 @@ import { defaultAgentConfig } from "@core/types.js";
 import { ActionTracker } from "@core/action/action-tracker.js";
 import { ToolExecutor } from "@core/executors/tool-executor.js";
 import { createAgentTools } from "@core/agent/tools.js";
-import { reminderScheduler } from "@core/executors/reminder-scheduler.js";
+import { reminderScheduler } from "../utils/reminder-scheduler.js";
+import { setSetting, getSetting, getAgentSystemPromptModifier } from "../utils/settings-service.js";
+import {
+    logTokenUsage,
+    getSessionUsageSummary,
+    getGlobalUsageSummary,
+} from "../utils/token-logger.js";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import getAgentModel from "@providers/openrouter.js";
 import { renderTerminalMarkdown } from "@tui/terminal-md.js";
@@ -75,9 +81,11 @@ async function pickSession(projectPath: string): Promise<Session> {
 async function handleLocalCommands(
     input: string,
     session: Session,
-    tracker: ActionTracker
+    tracker: ActionTracker,
+    state: { isTemporary: boolean }
 ): Promise<Session | null> {
-    const cmd = input.toLowerCase();
+    const cleanInput = input.trim();
+    const cmd = cleanInput.split(" ")[0]!.toLowerCase();
 
     if (cmd === "/sessions") {
         const newSession = await pickSession(session.projectPath);
@@ -91,13 +99,121 @@ async function handleLocalCommands(
         return session;
     }
 
+    if (cmd === "/style") {
+        const parts = cleanInput.split(/\s+/);
+        let targetStyle = parts[1]?.toLowerCase();
+
+        if (
+            !targetStyle ||
+            !["default", "formal", "descriptive", "concise"].includes(targetStyle)
+        ) {
+            targetStyle = (await select({
+                message: "Choose Agent Writing Style / Persona:",
+                options: [
+                    { value: "default", label: "Default", hint: "Standard balanced responses" },
+                    { value: "concise", label: "Concise", hint: "Code-centric, short and direct" },
+                    {
+                        value: "descriptive",
+                        label: "Descriptive",
+                        hint: "Detailed explanations and logic breakdowns",
+                    },
+                    {
+                        value: "formal",
+                        label: "Formal",
+                        hint: "Academic and professional phrasing",
+                    },
+                ],
+            })) as string;
+        }
+
+        if (isCancel(targetStyle)) return session;
+
+        await setSetting("writing_style", targetStyle);
+        log.success(`Agent style updated to: ${chalk.cyan(targetStyle.toUpperCase())}`);
+        return session;
+    }
+
+    if (cmd === "/instructions") {
+        const instText = cleanInput.slice("/instructions".length).trim();
+        if (!instText) {
+            const current = await getSetting("custom_instructions", "");
+            console.log(
+                `\n${chalk.bold("Current Custom Instructions:")}\n${current || chalk.dim("(none)")}\n`
+            );
+
+            const newInst = await text({
+                message: "Enter new custom instructions (or press enter/ESC to keep current):",
+                placeholder: "e.g. Always write ESM modules, use tab indentation...",
+            });
+
+            if (isCancel(newInst) || newInst === undefined) return session;
+
+            if (newInst.trim()) {
+                await setSetting("custom_instructions", newInst.trim());
+                log.success("Custom instructions updated.");
+            }
+        } else {
+            await setSetting("custom_instructions", instText);
+            log.success("Custom instructions updated.");
+        }
+        return session;
+    }
+
+    if (cmd === "/clear_instructions" || cmd === "/clear-instructions") {
+        await setSetting("custom_instructions", "");
+        log.success("Custom instructions cleared.");
+        return session;
+    }
+
+    if (cmd === "/analytics" || cmd === "/usage") {
+        const sessionSummary = await getSessionUsageSummary(session.id);
+        const globalSummary = await getGlobalUsageSummary();
+
+        const formatNum = (n: number) => n.toLocaleString();
+
+        console.log(`
+  ${chalk.bgCyan.black.bold(" INGENIUM TOKEN ANALYTICS ")}
+  
+  ${chalk.bold("Current Session Usage:")}
+  ┌──────────────────┬──────────────────────────┐
+  │ Prompt Tokens    │ ${chalk.cyan(formatNum(sessionSummary.totalPrompt).padEnd(24))} │
+  │ Comp. Tokens     │ ${chalk.cyan(formatNum(sessionSummary.totalCompletion).padEnd(24))} │
+  │ Total Tokens     │ ${chalk.cyan(formatNum(sessionSummary.totalTokens).padEnd(24))} │
+  └──────────────────┴──────────────────────────┘
+  
+  ${chalk.bold("Global Lifetime Usage:")}
+  ┌──────────────────┬──────────────────────────┐
+  │ Total Queries    │ ${chalk.cyan(formatNum(globalSummary.count).padEnd(24))} │
+  │ Prompt Tokens    │ ${chalk.cyan(formatNum(globalSummary.totalPrompt).padEnd(24))} │
+  │ Comp. Tokens     │ ${chalk.cyan(formatNum(globalSummary.totalCompletion).padEnd(24))} │
+  │ Total Tokens     │ ${chalk.cyan(formatNum(globalSummary.totalTokens).padEnd(24))} │
+  └──────────────────┴──────────────────────────┘
+        `);
+        return session;
+    }
+
+    if (cmd === "/temporary" || cmd === "/temp") {
+        state.isTemporary = !state.isTemporary;
+        if (state.isTemporary) {
+            log.warn("Temporary Mode ENABLED. Conversation logs will NOT be saved to disk.");
+        } else {
+            log.success("Temporary Mode DISABLED. Conversation logs will be saved to disk.");
+        }
+        return session;
+    }
+
     if (cmd === "/help") {
         const helpText = `
     ${chalk.bold("Available Local Commands:")}
-    ${chalk.cyan("/help")}   - Show this menu
-    ${chalk.cyan("/sessions")} - Switch or create sessions
-    ${chalk.cyan("/clear")}  - Wipe current session memory
-    ${chalk.cyan("/exit")}    - Terminate the agent
+    ${chalk.cyan("/help")}               - Show this menu
+    ${chalk.cyan("/sessions")}           - Switch or create sessions
+    ${chalk.cyan("/clear")}              - Wipe current session memory
+    ${chalk.cyan("/style [name]")}       - Change writing style (concise, descriptive, formal, default)
+    ${chalk.cyan("/instructions [text]")} - Set custom guidelines for response formatting
+    ${chalk.cyan("/clear_instructions")}  - Reset custom instructions
+    ${chalk.cyan("/analytics")}          - Display token usage and cost metrics
+    ${chalk.cyan("/temporary")}          - Toggle transient mode (don't save logs to disk)
+    ${chalk.cyan("/exit")}               - Terminate the agent
         `.trim();
         console.log(`\n${helpText}\n`);
         return session;
@@ -143,9 +259,11 @@ export async function runAgentMode() {
 
     await reminderScheduler.init();
 
+    const state = { isTemporary: false };
+
     while (true) {
         const input = await text({
-            message: chalk.green.bold("❯"),
+            message: chalk.green.bold(state.isTemporary ? "temp❯" : "❯"),
             placeholder: "Input objective or slash command...",
         });
 
@@ -158,14 +276,19 @@ export async function runAgentMode() {
         if (!userMessage) continue;
 
         if (userMessage.startsWith("/")) {
-            const newSession = await handleLocalCommands(userMessage, session, tracker);
+            const newSession = await handleLocalCommands(userMessage, session, tracker, state);
             if (newSession) {
                 session = newSession;
                 continue;
             }
         }
 
-        appendMessage(session, { role: "user", content: userMessage });
+        if (state.isTemporary) {
+            session.messages.push({ role: "user", content: userMessage });
+        } else {
+            appendMessage(session, { role: "user", content: userMessage });
+        }
+
         executor.clearStaging();
         tracker.clear();
 
@@ -175,6 +298,7 @@ export async function runAgentMode() {
         execSpinner.start("Thinking...");
 
         try {
+            const promptModifier = await getAgentSystemPromptModifier();
             const agent = new ToolLoopAgent({
                 model: await getAgentModel(),
                 stopWhen: stepCountIs(60),
@@ -182,6 +306,7 @@ export async function runAgentMode() {
 You are Ingenium, an expert AI coding assistant.
 Workspace root: ${config.codebasePath}
 Current local time is: ${new Date().toString()} (ISO: ${new Date().toISOString()}).
+${promptModifier}
 
 Rules:
 - All file mutations (create, modify, delete) are STAGED and shown to the user for approval. Never claim a file was written; state it was staged.
@@ -218,8 +343,31 @@ Rules:
 
             execSpinner.stop("Analysis complete.");
 
+            if (result.totalUsage) {
+                const usage = result.totalUsage as Record<string, unknown>;
+                const prompt =
+                    typeof usage["inputTokens"] === "number"
+                        ? usage["inputTokens"]
+                        : typeof usage["promptTokens"] === "number"
+                          ? usage["promptTokens"]
+                          : 0;
+                const completion =
+                    typeof usage["outputTokens"] === "number"
+                        ? usage["outputTokens"]
+                        : typeof usage["completionTokens"] === "number"
+                          ? usage["completionTokens"]
+                          : 0;
+                if (prompt > 0 || completion > 0) {
+                    await logTokenUsage(session.id, prompt, completion);
+                }
+            }
+
             if (result.text?.trim()) {
-                appendMessage(session, { role: "assistant", content: result.text });
+                if (state.isTemporary) {
+                    session.messages.push({ role: "assistant", content: result.text });
+                } else {
+                    appendMessage(session, { role: "assistant", content: result.text });
+                }
                 console.log("\n" + renderTerminalMarkdown(result.text) + "\n");
             }
 
@@ -255,10 +403,11 @@ export async function runPlanMode() {
     await reminderScheduler.init();
 
     let isExecuting = false;
+    const state = { isTemporary: false };
 
     while (true) {
         const input = await text({
-            message: chalk.green.bold("plan❯"),
+            message: chalk.green.bold(state.isTemporary ? "temp_plan❯" : "plan❯"),
             placeholder: isExecuting
                 ? "Input objective or command..."
                 : "Describe query or type /execute to run the plan...",
@@ -288,19 +437,30 @@ export async function runPlanMode() {
                 log.info("Executing approved plan from `ingenium-plan.md`...");
                 isExecuting = true;
 
-                appendMessage(session, {
-                    role: "user",
-                    content: `Plan Execution Request: Please read and execute the approved plan from "ingenium-plan.md" step-by-step. Here is the current content of "ingenium-plan.md":\n\n${planContent}`,
-                });
+                if (state.isTemporary) {
+                    session.messages.push({
+                        role: "user",
+                        content: `Plan Execution Request: Please read and execute the approved plan from "ingenium-plan.md" step-by-step. Here is the current content of "ingenium-plan.md":\n\n${planContent}`,
+                    });
+                } else {
+                    appendMessage(session, {
+                        role: "user",
+                        content: `Plan Execution Request: Please read and execute the approved plan from "ingenium-plan.md" step-by-step. Here is the current content of "ingenium-plan.md":\n\n${planContent}`,
+                    });
+                }
             } else {
-                const newSession = await handleLocalCommands(userMessage, session, tracker);
+                const newSession = await handleLocalCommands(userMessage, session, tracker, state);
                 if (newSession) {
                     session = newSession;
                     continue;
                 }
             }
         } else {
-            appendMessage(session, { role: "user", content: userMessage });
+            if (state.isTemporary) {
+                session.messages.push({ role: "user", content: userMessage });
+            } else {
+                appendMessage(session, { role: "user", content: userMessage });
+            }
         }
 
         if (userMessage.startsWith("/") && userMessage.toLowerCase() !== "/execute") {
@@ -316,11 +476,13 @@ export async function runPlanMode() {
         execSpinner.start("Thinking...");
 
         try {
+            const promptModifier = await getAgentSystemPromptModifier();
             const agentInstructions = isExecuting
                 ? `
 You are Ingenium, an expert AI coding assistant.
 Workspace root: ${config.codebasePath}
 Current local time is: ${new Date().toString()} (ISO: ${new Date().toISOString()}).
+${promptModifier}
 
 Rules:
 - You are in EXECUTION MODE. You must execute the approved plan from "ingenium-plan.md" step-by-step using your tools (file creation, modification, shell commands, etc.).
@@ -332,6 +494,7 @@ Rules:
 You are Ingenium, an expert AI coding assistant.
 Workspace root: ${config.codebasePath}
 Current local time is: ${new Date().toString()} (ISO: ${new Date().toISOString()}).
+${promptModifier}
 
 Rules:
 - You are in PLAN MODE. Your only goal is to research the codebase and draft/modify a comprehensive step-by-step plan in "ingenium-plan.md".
@@ -375,8 +538,31 @@ Rules:
 
             execSpinner.stop("Analysis complete.");
 
+            if (result.totalUsage) {
+                const usage = result.totalUsage as Record<string, unknown>;
+                const prompt =
+                    typeof usage["inputTokens"] === "number"
+                        ? usage["inputTokens"]
+                        : typeof usage["promptTokens"] === "number"
+                          ? usage["promptTokens"]
+                          : 0;
+                const completion =
+                    typeof usage["outputTokens"] === "number"
+                        ? usage["outputTokens"]
+                        : typeof usage["completionTokens"] === "number"
+                          ? usage["completionTokens"]
+                          : 0;
+                if (prompt > 0 || completion > 0) {
+                    await logTokenUsage(session.id, prompt, completion);
+                }
+            }
+
             if (result.text?.trim()) {
-                appendMessage(session, { role: "assistant", content: result.text });
+                if (state.isTemporary) {
+                    session.messages.push({ role: "assistant", content: result.text });
+                } else {
+                    appendMessage(session, { role: "assistant", content: result.text });
+                }
                 console.log("\n" + renderTerminalMarkdown(result.text) + "\n");
             }
 

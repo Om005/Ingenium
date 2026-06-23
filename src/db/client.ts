@@ -50,6 +50,21 @@ export function initDb(): void {
             created_at INTEGER NOT NULL,
             deliver_via TEXT NOT NULL DEFAULT 'desktop'
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS token_usage (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            prompt_tokens INTEGER NOT NULL,
+            completion_tokens INTEGER NOT NULL,
+            total_tokens INTEGER NOT NULL,
+            cost REAL NOT NULL,
+            created_at INTEGER NOT NULL
+        );
     `);
 }
 

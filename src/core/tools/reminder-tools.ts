@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "@db/client.js";
 import { reminders } from "@db/schema.js";
 import { eq, and } from "drizzle-orm";
-import { reminderScheduler } from "../executors/reminder-scheduler.js";
+import { reminderScheduler } from "../../utils/reminder-scheduler.js";
 
 export class ReminderTools {
     constructor() {}
