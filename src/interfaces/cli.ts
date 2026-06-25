@@ -1,6 +1,7 @@
 import { select, isCancel, intro, outro } from "@clack/prompts";
 import chalk from "chalk";
 import { runAgentMode, runPlanMode } from "@core/orchestrator.js";
+import { runTelegramMode } from "./telegram/index.js";
 
 export default async function runCliMode() {
     console.clear();
@@ -17,7 +18,12 @@ export default async function runCliMode() {
             {
                 value: "plan",
                 label: "Plan Mode",
-                hint: "Plan proposal and review",
+                hint: "Sequential proposal and review",
+            },
+            {
+                value: "telegram",
+                label: "Telegram Bot Mode",
+                hint: "Run Ingenium via Telegram Bot interface",
             },
             {
                 value: "exit",
@@ -38,6 +44,9 @@ export default async function runCliMode() {
             break;
         case "plan":
             await runPlanMode();
+            break;
+        case "telegram":
+            await runTelegramMode();
             break;
     }
 }

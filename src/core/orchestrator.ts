@@ -211,7 +211,7 @@ async function handleLocalCommands(
     ${chalk.cyan("/style [name]")}       - Change writing style (concise, descriptive, formal, default)
     ${chalk.cyan("/instructions [text]")} - Set custom guidelines for response formatting
     ${chalk.cyan("/clear_instructions")}  - Reset custom instructions
-    ${chalk.cyan("/analytics")}          - Display token usage and cost metrics
+    ${chalk.cyan("/analytics")}          - Display token usage metrics
     ${chalk.cyan("/temporary")}          - Toggle transient mode (don't save logs to disk)
     ${chalk.cyan("/exit")}               - Terminate the agent
         `.trim();
